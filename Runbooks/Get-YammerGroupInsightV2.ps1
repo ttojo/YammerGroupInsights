@@ -55,3 +55,17 @@ function Invoke-RestAPI {
 
     return $response
 }
+
+# グループ情報を取得する
+function Get-GroupInfo {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)] $GroupId
+    )
+
+    $apiVersion = "v1"
+    $Resource = "groups/$($GroupId).json"
+    $uri = "https://www.yammer.com/api/$apiVersion/$Resource"
+    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method 'Get' -RetryCount 10 -RetryInterval 30
+    $response
+}
