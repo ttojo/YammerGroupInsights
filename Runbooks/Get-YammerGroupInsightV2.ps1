@@ -199,9 +199,41 @@ Write-Verbose "Yammer グループ リスト: $groupIdsString"
 $groupIds = $groupIdsString -split ","
 
 $groupList = @()
+$messageList = @()
+$likedList = @()
 
 foreach ($groupId in $groupIds) {
-	$groupList += Get-GroupInfo -GroupId $groupId
+
+	Write-Verbose "グループ (ID=$groupId) の処理を始めます。"
+	$groupInfo = Get-GroupInfo -GroupId $groupId
+	$groupList += $groupInfo
+	Write-Verbose "グループ名は [$($groupInfo.full_name)] です。"
+
+	Write-Host "メンバー リストを作成します。"
+	$groupMembers = Get-GroupMembers -GroupId $groupId
+
+	Write-Verbose "スレッド一覧を作成します。"
+    $threadMessages = Get-GroupThreads -GroupId $groupId
+    Write-Verbose "トータル $($threadMessages.length) 件のメッセージを取得しました。"
+
+    $threadMessages2 = $threadMessages | Sort-Object thread_id -Unique
+    Write-Verbose "$($threadMessages2.length) 件のスレッドが見つかりました。"
+
+	foreach ($thread in $threadMessages2) {
+		$messages = Get-ThreadMessages -ThreadId $thread.thread_id
+		foreach ($message in $messages) {
+			if ($message.liked_by.count -gt 0) {
+				$likedUsers = Get-LikedUsers -MessageId $message.id
+				#foreach ($likedUser in $likedUsers) {
+				#	$likedList += [PSCustomObject]@{
+				#		message_id = $message.id
+				#		liked_user = $likedUser
+				#	}
+				#}
+			}
+		}
+		$messageList += $messages
+	}
 }
 
 Write-Verbose "ファイルに保存します。"
