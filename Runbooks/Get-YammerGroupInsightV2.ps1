@@ -219,12 +219,12 @@ foreach ($thread in $threadMessages2) {
 	foreach ($message in $messages) {
 		if ($message.liked_by.count -gt 0) {
 			$likedUsers = Get-LikedUsers -MessageId $message.id
-			#foreach ($likedUser in $likedUsers) {
-			#	$likedList += [PSCustomObject]@{
-			#		message_id = $message.id
-			#		liked_user = $likedUser
-			#	}
-			#}
+			foreach ($likedUser in $likedUsers) {
+				$likedList += [PSCustomObject]@{
+					message_id = $message.id
+					user_id = $likedUser.id
+				}
+			}
 		}
 	}
 	$messageList += $messages
@@ -251,6 +251,16 @@ Write-Verbose "ファイルに保存します。"
 $DateBlobName = "YammerMessages_" + $GroupId + "_" + $Date + ".json"
 $LocalFile = $LocalTargetDirectory + $DateBlobName
 $messageList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
+Write-Verbose "$($LocalFile) に保存しました。"
+
+Write-Verbose "Azure ストレージに保存します。"
+Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $DateBlobName | Out-Null
+Write-Verbose "Azure ストレージに保存しました。"
+
+Write-Verbose "ファイルに保存します。"
+$DateBlobName = "YammerLiked_" + $GroupId + "_" + $Date + ".json"
+$LocalFile = $LocalTargetDirectory + $DateBlobName
+$likedList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
 Write-Verbose "$($LocalFile) に保存しました。"
 
 Write-Verbose "Azure ストレージに保存します。"
