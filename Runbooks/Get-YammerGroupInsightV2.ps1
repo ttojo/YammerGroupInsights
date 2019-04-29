@@ -204,4 +204,19 @@ foreach ($groupId in $groupIds) {
 	$groupList += Get-GroupInfo -GroupId $groupId
 }
 
-$groupList | ft
+Write-Verbose "ファイルに保存します。"
+$LocalTargetDirectory = "C:\"
+$Date = Get-Date -Format "yyyyMMdd-HHmmss"
+
+$DateBlobName = "YammerGroup_" + $Date + ".json"
+$LocalFile = $LocalTargetDirectory + $DateBlobName
+$groupList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile
+Write-Verbose "$($LocalFile) に保存しました。"
+
+Write-Verbose "Azure ストレージに保存します。"
+$conn = Get-AutomationConnection -Name "AzureRunAsConnection"
+Add-AzureRMAccount -ServicePrincipal -Tenant $Conn.TenantID -ApplicationID $Conn.ApplicationID -CertificateThumbprint $Conn.CertificateThumbprint | Out-Null
+Set-AzureRmCurrentStorageAccount -ResourceGroupName 'TOTOJO-STU-RG' -StorageAccountName 'yammergroupinsight' | Out-Null
+
+Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $DateBlobName | Out-Null
+Write-Verbose "Azure ストレージに保存しました。"
