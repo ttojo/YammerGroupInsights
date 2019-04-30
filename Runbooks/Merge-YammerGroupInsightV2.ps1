@@ -173,3 +173,10 @@ $LocalFile = $LocalTargetDirectory + $blobName
 $messageList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
 Get-AzureStorageBlob -Container "json" -Prefix $blobName | Remove-AzureStorageBlob
 Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $blobName | Out-Null
+
+Write-Verbose "いいね一覧をファイル化する"
+$blobName = "YammerLikes-Current.json"
+$LocalFile = $LocalTargetDirectory + $blobName
+$likeList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
+Get-AzureStorageBlob -Container "json" -Prefix $blobName | Remove-AzureStorageBlob
+Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $blobName | Out-Null
