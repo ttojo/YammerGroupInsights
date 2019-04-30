@@ -165,11 +165,11 @@ $blobName = "YammerGroups-Current.json"
 $LocalFile = $LocalTargetDirectory + $blobName
 $groupList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
 Get-AzureStorageBlob -Container "json" -Prefix $blobName | Remove-AzureStorageBlob
-Set-AzureStorageBlobContent -File $ExcelPath -Container "json" -Blob $blobName | Out-Null
+Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $blobName | Out-Null
 
 Write-Verbose "メッセージ一覧をファイル化する"
 $blobName = "YammerMessages-Current.json"
 $LocalFile = $LocalTargetDirectory + $blobName
 $messageList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
 Get-AzureStorageBlob -Container "json" -Prefix $blobName | Remove-AzureStorageBlob
-Set-AzureStorageBlobContent -File $ExcelPath -Container "json" -Blob $blobName | Out-Null
+Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $blobName | Out-Null
