@@ -218,11 +218,21 @@ foreach ($thread in $threadMessages2) {
 	$messages = Get-ThreadMessages -ThreadId $thread.thread_id
 	foreach ($message in $messages) {
 		if ($message.liked_by.count -gt 0) {
-			$likedUsers = Get-LikedUsers -MessageId $message.id
-			foreach ($likedUser in $likedUsers) {
-				$likedList += [PSCustomObject]@{
-					message_id = $message.id
-					user_id = $likedUser.id
+			if ($message.liked_by.count -eq $message.liked_by.names.length) {
+                $message.liked_by.names | ForEach-Object {
+                    $likedUser = $_
+					$likedList += [PSCustomObject]@{
+						message_id = $message.id
+						user_id = $likedUser.user_id
+					}
+                }
+			} else {
+				$likedUsers = Get-LikedUsers -MessageId $message.id
+				foreach ($likedUser in $likedUsers) {
+					$likedList += [PSCustomObject]@{
+						message_id = $message.id
+						user_id = $likedUser.id
+					}
 				}
 			}
 		}
