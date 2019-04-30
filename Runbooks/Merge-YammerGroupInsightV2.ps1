@@ -98,6 +98,8 @@ Set-AzureRmCurrentStorageAccount -ResourceGroupName 'TOTOJO-STU-RG' -StorageAcco
 $groupList = @()
 $messageList = @()
 $likeList = @()
+$userList = @()
+$memberList = @()
 
 foreach ($groupId in $groupIds) {
     Write-Verbose "=== グループ ID [$groupId] の処理 ==="
@@ -108,7 +110,7 @@ foreach ($groupId in $groupIds) {
 
 
 	write-Verbose "グループ メンバーを読み込み"
-    $prefix = "YammerMembers_" + $groupId
+    $prefix = "YammerMembers_" + $groupId + "_"
     Write-Verbose "Prefix: $prefix"
     $blob = Get-AzureStorageBlob -Container "json" -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
     Write-Verbose "対象ファイル: $($blob.Name)"
@@ -124,8 +126,15 @@ foreach ($groupId in $groupIds) {
     Get-AzureStorageBlob -Container "json" -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -Skip 5 | Remove-AzureStorageBlob
 
 
+    Write-Verbose "グループ メンバーのリストを作成"
+	$groupMembers | ForEach-Object { $memberList += [PSCustomObject]@{ group_id = $groupId; user_id = $_.id } }
+
+	$userList += $groupMembers
+	$userList = $userList | Sort-Object id -Unique
+
+
 	write-Verbose "グループ メッセージを読み込み"
-    $prefix = "YammerMessages_" + $groupId
+    $prefix = "YammerMessages_" + $groupId + "_"
     Write-Verbose "Prefix: $prefix"
     $blob = Get-AzureStorageBlob -Container "json" -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
     Write-Verbose "対象ファイル: $($blob.Name)"
@@ -143,7 +152,7 @@ foreach ($groupId in $groupIds) {
 
 
 	write-Verbose "グループ メッセージを読み込み"
-    $prefix = "YammerLiked_" + $groupId
+    $prefix = "YammerLiked_" + $groupId + "_"
     Write-Verbose "Prefix: $prefix"
     $blob = Get-AzureStorageBlob -Container "json" -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
     Write-Verbose "対象ファイル: $($blob.Name)"
@@ -164,6 +173,20 @@ Write-Verbose "グループ一覧をファイル化する"
 $blobName = "YammerGroups-Current.json"
 $LocalFile = $LocalTargetDirectory + $blobName
 $groupList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
+Get-AzureStorageBlob -Container "json" -Prefix $blobName | Remove-AzureStorageBlob
+Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $blobName | Out-Null
+
+Write-Verbose "ユーザー一覧をファイル化する"
+$blobName = "YammerUsers-Current.json"
+$LocalFile = $LocalTargetDirectory + $blobName
+$userList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
+Get-AzureStorageBlob -Container "json" -Prefix $blobName | Remove-AzureStorageBlob
+Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $blobName | Out-Null
+
+Write-Verbose "メンバー一覧をファイル化する"
+$blobName = "YammerMembers-Current.json"
+$LocalFile = $LocalTargetDirectory + $blobName
+$memberList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
 Get-AzureStorageBlob -Container "json" -Prefix $blobName | Remove-AzureStorageBlob
 Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $blobName | Out-Null
 
