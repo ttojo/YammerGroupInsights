@@ -168,8 +168,8 @@ foreach ($groupId in $groupIds) {
 
     Write-Verbose "CSV ファイルをロード"
     $csvPath = $LocalTargetDirectory + $blob.Name
-    $groupStatus = Import-Csv $csvPath
-    $groupStatus | ft
+    $groupStatus = Import-Csv $csvPath -Encoding UTF8
+    #$groupStatus | ft
 
     Write-Verbose "最近のファイルだけ残して後は削除"
     Get-AzureStorageBlob -Container "csvfiles" -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -Skip 5 | Remove-AzureStorageBlob
