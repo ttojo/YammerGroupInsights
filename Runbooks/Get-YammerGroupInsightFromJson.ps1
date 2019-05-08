@@ -155,7 +155,7 @@ $membersHash.Values | Sort-Object fullName | ForEach-Object {
 Write-Verbose "ファイルに保存します。"
 $DateBlobName = "YammerGroup" + $GroupId + "_" + $Date + ".csv"
 $LocalFile = $LocalTargetDirectory + $DateBlobName
-$result | Export-CSV -Path $LocalFile -Delimiter "," -NoTypeInformation -Force
+$result | Export-CSV -Path $LocalFile -Delimiter "," -NoTypeInformation -Force -Encoding UTF8
 Write-Verbose "$($LocalFile) に保存しました。"
 
 Write-Verbose "Azure ストレージに保存します。"
