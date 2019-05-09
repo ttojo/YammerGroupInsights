@@ -1,4 +1,8 @@
-﻿$VerbosePreference = 'Continue'
+﻿param (
+    [Parameter(Mandatory = $true)] $BlobFileName
+)
+
+$VerbosePreference = 'Continue'
 
 function Get-DeveloperToken {
     $credential = Get-AutomationPSCredential -Name "YammerDeveloper"
@@ -208,7 +212,7 @@ Close-ExcelPackage -ExcelPackage $excel -Show:$false
 
 Set-AzureStorageBlobContent -File $ExcelPath -Container "reports" -Blob $ExcelName | Out-Null
 
-Get-AzureStorageBlob -Container "reports" -Prefix "Yammer-Current.xlsx" | Remove-AzureStorageBlob
-Set-AzureStorageBlobContent -File $ExcelPath -Container "reports" -Blob "Yammer-Current.xlsx" | Out-Null
+Get-AzureStorageBlob -Container "reports" -Prefix $BlobFileName | Remove-AzureStorageBlob
+Set-AzureStorageBlobContent -File $ExcelPath -Container "reports" -Blob $BlobFileName | Out-Null
 
 Get-AzureStorageBlob -Container "reports" -Prefix "YammerGroup" | Sort-Object LastModified -Desc | Select-Object -Skip 3 | Remove-AzureStorageBlob
