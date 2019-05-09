@@ -1,4 +1,5 @@
 ﻿param (
+    [Parameter(Mandatory = $true)] $YammerGroupIds,
     [Parameter(Mandatory = $true)] $BlobFileName,
     [Parameter(Mandatory = $true)] $ExcelPrefix
 )
@@ -84,7 +85,8 @@ $authHeader = @{
 }
 
 Write-Verbose "対象の Yammer グループ IDを取得"
-$groupIdsString = Get-AutomationVariable -Name 'YammerGroupIds'
+$groupIdsString = $YammerGroupIds
+#$groupIdsString = Get-AutomationVariable -Name 'YammerGroupIds'
 Write-Verbose "Yammer グループ リスト $groupIdsString"
 $groupIds = $groupIdsString -split ","
 
