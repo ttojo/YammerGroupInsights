@@ -27,7 +27,7 @@ function Invoke-RestAPI {
 
     while (-not $completed) {
         try {
-            $response = Invoke-WebRequest -Uri $uri -Headers $Headers -Method $Method -UseBasicParsing
+            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method
             $completed = $true
         } catch {
             $ex = $_.Exception
@@ -60,7 +60,7 @@ function Invoke-RestAPI {
         }
     }
 
-    return $response.Content | ConvertFrom-Json
+    return $response
 }
 
 # グループ情報を取得
@@ -77,6 +77,21 @@ function Get-GroupInfo {
     $response
 }
 
+# 全部ループの情報を取得
+function Get-AllGroups {
+    $apiVersion = "v1"
+    $Resource = "groups.json"
+	$page = 1
+	$result = @()
+	do {
+		$uri = "https://www.yammer.com/api/$apiVersion/$($Resource)?page=$page"
+	    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 30
+		$result += $response
+		$page++
+	} while ($response.length -gt 0)
+    $result
+}
+
 # Developer Token
 $developerToken = Get-DeveloperToken
 $authHeader = @{
@@ -89,6 +104,9 @@ $groupIdsString = $YammerGroupIds
 #$groupIdsString = Get-AutomationVariable -Name 'YammerGroupIds'
 Write-Verbose "Yammer グループ リスト $groupIdsString"
 $groupIds = $groupIdsString -split ","
+
+Write-Verbose "全グループの情報を取得 (非公開メソッドだとエラーになるグループがあった)"
+$groups = Get-AllGroups
 
 $LocalTargetDirectory = "C:\"
 $Date = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -133,7 +151,8 @@ foreach ($groupId in $groupIds) {
     Write-Verbose "=== グループ ID [$groupId] の処理 ==="
 
     Write-Verbose "グループ情報を取得"
-    $group = Get-GroupInfo -GroupId $groupId
+	$group = $groups | Where-Object { $_.id -eq $groupId }
+    #$group = Get-GroupInfo -GroupId $groupId
 
     # シート名の最大が 31 文字なので、グループ名が長いやつは切ります
     $sheetName = if ($group.full_name.length -le 31) { $group.full_name } else { $group.full_name.Substring(0, 31) }
