@@ -70,7 +70,7 @@ function Get-GroupInfo {
         [Parameter(Mandatory = $true)] $GroupId
     )
 
-    $uri = "https://www.yammer.com/api/v1/groups/$($GroupId).json"
+    $uri = "https://www.yammer.com/api/v1/groups/$($GroupId)"
     $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 20 -RetryInterval 3
     $response
 }
@@ -134,12 +134,13 @@ foreach ($groupId in $groupIds) {
     $group = Get-GroupInfo -GroupId $groupId
 
     # シート名の最大が 31 文字なので、グループ名が長いやつは切ります
-    $sheetName = if ($group.full_name.length -le 31) { $group.full_name } else { $group.full_name.Substring(0, 31) }
+	$groupFullName = $group.response.'full-name'
+    $sheetName = if ($groupFullName.length -le 31) { $groupFullName } else { $groupFullName.Substring(0, 31) }
     $worksheet = Add-WorkSheet -ExcelPackage $excel -ClearSheet -WorksheetName $sheetName
     $worksheet.View.FreezePanes(3, 1)
 
     # シートの左上にグループ名を入れてみる
-    $worksheet.Cells[1, 1].Value = $group.full_name
+    $worksheet.Cells[1, 1].Value = $groupFullName
     $worksheet.Cells[1, 1].Style.Font.Size = 18
     $worksheet.Cells[1, 1].Style.Font.Bold = $true
 
@@ -190,7 +191,7 @@ foreach ($groupId in $groupIds) {
         $worksheet.Cells[(3 + $row), 8].Value = [int]$groupStatus[$row].likeCount
         $worksheet.Cells[(3 + $row), 9].Value = [int]$groupStatus[$row].likedCount
 
-        $worksheet0.Cells[($row0 + $row), 1].Value = $group.full_name
+        $worksheet0.Cells[($row0 + $row), 1].Value = $groupFullName
         for ($col = 1; $col -le 9; $col++) {
             $worksheet0.Cells[($row0 + $row), ($col + 1)].Value = $worksheet.Cells[(3 + $row), $col].Value
         }

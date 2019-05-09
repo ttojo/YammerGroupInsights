@@ -104,6 +104,6 @@ Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $DateBlobNa
 Write-Verbose "Azure ストレージに保存しました。"
 
 Get-AzureStorageBlob -Container "json" -Prefix "YammerAllGroups-Current.json" | Remove-AzureStorageBlob
-Set-AzureStorageBlobContent -File $ExcelPath -Container "json" -Blob "YammerAllGroups-Current.json" | Out-Null
+Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob "YammerAllGroups-Current.json" | Out-Null
 
 Get-AzureStorageBlob -Container "json" -Prefix "YammerAllGroups_" | Sort-Object LastModified -Desc | Select-Object -Skip 3 | Remove-AzureStorageBlob
