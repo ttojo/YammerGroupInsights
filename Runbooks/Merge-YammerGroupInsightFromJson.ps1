@@ -88,7 +88,7 @@ $groupIdsString = $YammerGroupIds
 Write-Verbose "Yammer グループ リスト $groupIdsString"
 $groupIds = $groupIdsString -split ","
 
-$LocalTargetDirectory = "C:\"
+$LocalTargetDirectory = "C:\Reports\"
 $Date = Get-Date -Format "yyyyMMdd-HHmmss"
 $ExcelName = $ExcelPrefix + "_" + $Date + ".xlsx"
 $ExcelPath = $LocalTargetDirectory + $ExcelName
