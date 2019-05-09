@@ -1,5 +1,6 @@
 ﻿param (
-    [Parameter(Mandatory = $true)] $BlobFileName
+    [Parameter(Mandatory = $true)] $BlobFileName,
+    [Parameter(Mandatory = $true)] $ExcelPrefix
 )
 
 $VerbosePreference = 'Continue'
@@ -89,7 +90,7 @@ $groupIds = $groupIdsString -split ","
 
 $LocalTargetDirectory = "C:\"
 $Date = Get-Date -Format "yyyyMMdd-HHmmss"
-$ExcelName = "YammerGroup" + "_" + $Date + ".xlsx"
+$ExcelName = $ExcelPrefix + "_" + $Date + ".xlsx"
 $ExcelPath = $LocalTargetDirectory + $ExcelName
 
 $excel = Export-Excel -Path $ExcelPath -ClearSheet -PassThru -FreezeTopRow -WorksheetName "全グループ統合"
@@ -215,4 +216,4 @@ Set-AzureStorageBlobContent -File $ExcelPath -Container "reports" -Blob $ExcelNa
 Get-AzureStorageBlob -Container "reports" -Prefix $BlobFileName | Remove-AzureStorageBlob
 Set-AzureStorageBlobContent -File $ExcelPath -Container "reports" -Blob $BlobFileName | Out-Null
 
-Get-AzureStorageBlob -Container "reports" -Prefix "YammerGroup" | Sort-Object LastModified -Desc | Select-Object -Skip 3 | Remove-AzureStorageBlob
+Get-AzureStorageBlob -Container "reports" -Prefix $ExcelPrefix | Sort-Object LastModified -Desc | Select-Object -Skip 3 | Remove-AzureStorageBlob
