@@ -27,7 +27,7 @@ function Invoke-RestAPI {
 
     while (-not $completed) {
         try {
-            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method
+            $response = Invoke-WebRequest -Uri $uri -Headers $Headers -Method $Method
             $completed = $true
         } catch {
             $ex = $_.Exception
@@ -60,7 +60,7 @@ function Invoke-RestAPI {
         }
     }
 
-    return $response
+    return $response.Content | ConvertFrom-Json
 }
 
 # グループ情報を取得
@@ -71,7 +71,7 @@ function Get-GroupInfo {
     )
 
     $apiVersion = "v1"
-    $Resource = "/groups/$($GroupId).json"
+    $Resource = "groups/$($GroupId).json"
     $uri = "https://www.yammer.com/api/$apiVersion/$Resource"
     $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 30
     $response
