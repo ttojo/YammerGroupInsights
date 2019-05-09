@@ -27,7 +27,7 @@ function Invoke-RestAPI {
 
     while (-not $completed) {
         try {
-            $response = Invoke-WebRequest -Uri $uri -Headers $Headers -Method $Method
+            $response = Invoke-WebRequest -Uri $uri -Headers $Headers -Method $Method -UseBasicParsing
             $completed = $true
         } catch {
             $ex = $_.Exception
