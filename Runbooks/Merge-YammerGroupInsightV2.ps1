@@ -190,6 +190,13 @@ $memberList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -File
 Get-AzureStorageBlob -Container "json" -Prefix $blobName | Remove-AzureStorageBlob
 Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $blobName | Out-Null
 
+Write-Verbose "メッセージ一覧から未使用絡むの値を削除（高速化）"
+foreach ($msg in $messageList) {
+	$msg.body.parsed = ""
+	$msg.body.rich = ""
+	$msg.attachments = $null
+}
+
 Write-Verbose "メッセージ一覧をファイル化する"
 $blobName = "YammerMessages-Current.json"
 $LocalFile = $LocalTargetDirectory + $blobName
