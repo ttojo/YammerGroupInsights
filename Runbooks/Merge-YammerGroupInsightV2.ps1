@@ -195,6 +195,7 @@ foreach ($msg in $messageList) {
 	$msg.body.parsed = ""
 	$msg.body.rich = ""
 	$msg.attachments = $null
+	$msg.content_excerpt = ""
 }
 
 Write-Verbose "メッセージ一覧をファイル化する"
