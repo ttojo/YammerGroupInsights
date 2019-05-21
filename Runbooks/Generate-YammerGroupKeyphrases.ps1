@@ -16,6 +16,8 @@ function Invoke-RestAPI {
         [Parameter(Mandatory = $true)] [Uri] $Uri,
         [Parameter(Mandatory = $false)] [System.Collections.IDictionary] $Headers,
         [Parameter(Mandatory = $false)] [Microsoft.PowerShell.Commands.WebRequestMethod] $Method = [Microsoft.PowerShell.Commands.WebRequestMethod]::Get,
+		[Parameter(Mandatory = $false)] [Object] $Body,
+		[Parameter(Mandatory = $false)] [string] $ContentType,
         [Parameter(Mandatory = $false)] [Int32] $RetryCount = 0,
         [Parameter(Mandatory = $false)] [Int32] $RetryInterval = 10
     )
@@ -25,7 +27,7 @@ function Invoke-RestAPI {
 
     while (-not $completed) {
         try {
-            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method
+            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method -Body $Body -ContentType $ContentType
             $completed = $true
         } catch {
             $ex = $_.Exception
@@ -77,7 +79,7 @@ function Get-AzureKeywords ($messageToEvaluate)
     $messagePayload = [System.Text.Encoding]::UTF8.GetBytes($messagePayload)
 
     #invoke the Text Analytics Keyword API
-    $keywordResult = Invoke-RestMethod -Method Post -Uri $keyPhraseURI -Header @{ "Ocp-Apim-Subscription-Key" = $PrimaryApiKey } -Body $messagePayload -ContentType "application/json" 
+    $keywordResult = Invoke-RestAPI -Method Post -Uri $keyPhraseURI -Header @{ "Ocp-Apim-Subscription-Key" = $PrimaryApiKey } -Body $messagePayload -ContentType "application/json"  -RetryCount 10 -RetryInterval 30
 
 	if ($keywordResult.documents.length -eq 0) {
 		return ""
@@ -164,7 +166,6 @@ foreach ($msg in $messageList) {
 		id = $msg.id
 		key_phrase = $phrase
 	})
-
 	$count++
 }
 
