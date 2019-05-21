@@ -63,6 +63,8 @@ function Invoke-RestAPI {
 
 function Get-AzureKeywords ($messageToEvaluate)
 {
+	$azureRegion = "japaneast"
+
     #define cognitive services URLs
     $keyPhraseURI = "https://$azureRegion.api.cognitive.microsoft.com/text/analytics/v2.0/keyPhrases"
 
