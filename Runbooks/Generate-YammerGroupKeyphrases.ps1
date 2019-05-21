@@ -161,7 +161,7 @@ foreach ($msg in $messageList) {
 		key_phrase = $phrase
 	})
 
-	count++
+	$count++
 }
 
 
