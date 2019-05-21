@@ -119,7 +119,7 @@ if ($blob -ne $null) {
 }
 
 Write-Verbose "グループ メッセージを読み込み"
-$blobName = "YammerMessages-Current.json"
+$prefix = "YammerMessages-Current.json"
 Write-Verbose "Prefix: $prefix"
 $blob = Get-AzureStorageBlob -Container "json" -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
 Write-Verbose "対象ファイル: $($blob.Name)"
