@@ -79,6 +79,10 @@ function Get-AzureKeywords ($messageToEvaluate)
     #invoke the Text Analytics Keyword API
     $keywordResult = Invoke-RestMethod -Method Post -Uri $keyPhraseURI -Header @{ "Ocp-Apim-Subscription-Key" = $PrimaryApiKey } -Body $messagePayload -ContentType "application/json" 
 
+	if ($keywordResult.documents.length -eq 0) {
+		return ""
+	}
+
     #return the keywords
     return $keywordResult.documents.keyPhrases
 }
