@@ -136,7 +136,7 @@ $messageList = Get-Content $jsonPath | ConvertFrom-Json
 $count = 0
 
 foreach ($msg in $messageList) {
-	if ($count > 10) {
+	if ($count -gt 10) {
 		break
 	}
 
