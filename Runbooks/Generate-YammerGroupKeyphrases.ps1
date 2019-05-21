@@ -142,8 +142,13 @@ $messageList = Get-Content $jsonPath | ConvertFrom-Json
 $count = 0
 
 foreach ($msg in $messageList) {
-	if ($count -gt 10) {
+	if ($count -gt 1000) {
 		break
+	}
+
+	$dt = [datetime]$msg.created_at
+	if ($dt.Year -lt 2018) {
+		continue
 	}
 
 	if ($keyPhraseHash.ContainsKey($msg.id) -eq $true) {
