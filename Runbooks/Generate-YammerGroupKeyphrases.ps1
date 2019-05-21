@@ -142,7 +142,7 @@ $messageList = Get-Content $jsonPath | ConvertFrom-Json
 $count = 0
 
 foreach ($msg in $messageList) {
-	if ($count -gt 1000) {
+	if ($count -gt 10) {
 		break
 	}
 
@@ -188,3 +188,5 @@ Write-Verbose "最新のキーフレーズ ファイルを保存"
 $blobName = "YammerKeyPhrases-Current.json"
 Get-AzureStorageBlob -Container "json" -Prefix $blobName | Remove-AzureStorageBlob
 Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $blobName | Out-Null
+
+Write-Output "$($count) 件のレコードを処理しました。"
