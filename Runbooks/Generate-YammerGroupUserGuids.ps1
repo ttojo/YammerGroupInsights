@@ -109,13 +109,13 @@ $userList | ForEach-Object {
 
 		$response = Invoke-RestAPI -Method Post -Uri $WebUri -Body $messagePayload -ContentType "application/json" -RetryCount 10 -RetryInterval 30
 
-		$response.user | ForEach-Object {
+		$response.users | ForEach-Object {
 			$newGuid = [PSCustomObject]@{
 				id = $_.id
 				email = $_.email
 				guid = $_.guid
 			}
-			$guidHash += $newGuid
+			$guidHash.Add($_.id, $newGuid)
 			$results += $newGuid
 		}
 	}
