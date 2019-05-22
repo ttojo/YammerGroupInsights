@@ -118,7 +118,7 @@ if ($blob -ne $null) {
 	$keyPhrases | ForEach-Object {
 		$keyPhraseHash.Add($_.id, [PSCustomObject]@{
 			id = $_.id
-			key_phrase = $_.key_phrase
+			key_phrases = $_.key_phrases
 		})
 	}
 
@@ -169,7 +169,7 @@ foreach ($msg in $messageList) {
 
 	$keyPhraseHash.Add($msg.id, [PSCustomObject]@{
 		id = $msg.id
-		key_phrase = $phrase
+		key_phrases = $phrase
 	})
 	$count++
 }
