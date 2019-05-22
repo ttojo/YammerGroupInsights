@@ -79,23 +79,51 @@ Get-AzureStorageBlob -Container "json" -Blob $blobName | Get-AzureStorageBlobCon
 $LocalFile = $LocalTargetDirectory + $blobName
 $userList = Get-Content $LocalFile | ConvertFrom-Json
 
+Write-Verbose "ユーザー GUID を一旦ダウンロードする"
+$blobName = "YammerUserGuids-Current.json"
+Get-AzureStorageBlob -Container "json" -Blob $blobName | Get-AzureStorageBlobContent -Destination $LocalTargetDirectory | Out-Null
+$LocalFile = $LocalTargetDirectory + $blobName
+$guidList = Get-Content $LocalFile | ConvertFrom-Json
+
+Write-Verbose "処理高速化のために GUID リストをハッシュで持つ"
+$guidHash = @{}
+$guidList | ForEach-Object {
+	$guidHash.Add($_.id, [PSCustomObject]@{
+		id = $_.id
+		email = $_.email
+		guid = $_.guid
+	})
+}
+
 $results = @()
 
 $userList | ForEach-Object {
 	$user = $_
 
-	$requestHashtable = @{"id" = $user.id; "email" = $user.email}
-	$messagePayLoad = ConvertTo-Json $requestHashtable
-	$messagePayload = [System.Text.Encoding]::UTF8.GetBytes($messagePayload)
+	if (guidHash.ContainsKey($user.id)) {
+		$results += guidHash[$user.id]
+	} else {
+		$requestHashtable = @{"id" = $user.id; "email" = $user.email}
+		$messagePayLoad = ConvertTo-Json $requestHashtable
+		$messagePayload = [System.Text.Encoding]::UTF8.GetBytes($messagePayload)
 
-	$response = Invoke-RestAPI -Method Post -Uri $uri -Body $messagePayload -ContentType "application/json" -RetryCount 10 -RetryInterval 30
+		$response = Invoke-RestAPI -Method Post -Uri $WebUri -Body $messagePayload -ContentType "application/json" -RetryCount 10 -RetryInterval 30
 
-	$results += $response.users
+		$response.user | ForEach-Object {
+			$newGuid = [PSCustomObject]@{
+				id = $_.id
+				email = $_.email
+				guid = $_.guid
+			}
+			$guidHash += $newGuid
+			$results += $newGuid
+		}
+	}
 }
 
 Write-Verbose "ユーザー一覧をファイル化する"
 $blobName = "YammerUserGuids-Current.json"
-$LocalFile = $LocalTargetDirectory + $blobName
+$LocalFile = $LocalTargetDirectory + "YammerUserGuids_" + $Date + ".json"
 $results | Sort-Object id -Unique | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
-Get-AzureStorageBlob -Container "json" -Prefix $blobName | Remove-AzureStorageBlob
+Get-AzureStorageBlob -Container "json" -Blob $blobName | Remove-AzureStorageBlob
 Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $blobName | Out-Null
