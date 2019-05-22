@@ -100,8 +100,8 @@ $results = @()
 $userList | ForEach-Object {
 	$user = $_
 
-	if (guidHash.ContainsKey($user.id)) {
-		$results += guidHash[$user.id]
+	if ($guidHash.ContainsKey($user.id)) {
+		$results += $guidHash[$user.id]
 	} else {
 		$requestHashtable = @{"id" = $user.id; "email" = $user.email}
 		$messagePayLoad = ConvertTo-Json $requestHashtable
