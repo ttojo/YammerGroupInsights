@@ -181,7 +181,7 @@ $requestTable = @()
 $userList | ForEach-Object {
 	$requestTable += @{"id" = $_.id; "email" = $_.email}
 }
-$messagePayLoad = ConvertTo-Json $requestHashtable
+$messagePayLoad = ConvertTo-Json $requestTable
 $messagePayload = [System.Text.Encoding]::UTF8.GetBytes($messagePayload)
 $uri = "https://prod-26.westcentralus.logic.azure.com:443/workflows/d7db68b8f2564b51a5df0f53ebc49015/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=HKQoJ4rX9E2z2Dx_5DI7F9pi-SUSLdRnULmla9KWoKE"
 $response = Invoke-RestMethod -Method Post -Uri $uri -Body $messagePayload -ContentType "application/json"
