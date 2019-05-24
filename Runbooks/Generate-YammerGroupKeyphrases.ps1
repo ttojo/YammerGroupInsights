@@ -155,21 +155,17 @@ foreach ($msg in $messageList) {
 		continue
 	}
 
-	$phrase = $null
+	$phrases = @()
 
 	Write-Verbose "テキスト分析"
 	$keywords = Get-AzureKeywords -messageToEvaluate $msg.body.plain
 	$keywords | ForEach-Object {
-		if ($phrase -eq $null) {
-			$phrase = $_
-		} else {
-			$phrase = $phrase + "," + $_
-		}
+		$phrases += $_
 	}
 
 	$keyPhraseHash.Add($msg.id, [PSCustomObject]@{
 		id = $msg.id
-		key_phrases = $phrase
+		key_phrases = $phrases
 	})
 	$count++
 }
