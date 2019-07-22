@@ -26,37 +26,42 @@ Write-Verbose "グループ名は [$($groupInfo.full_name)] です。"
 Write-Host "メンバー リストを作成します。"
 $groupMembers = Get-GroupMembers -GroupId $groupId
 
+# グループのスレッド一覧を作成 (そのままでは重複があるのでユニークなスレッド ID のみを抽出)
 Write-Verbose "スレッド一覧を作成します。"
-$threadMessages = Get-GroupThreads -GroupId $groupId
-Write-Verbose "トータル $($threadMessages.length) 件のメッセージを取得しました。"
+$threadMessages = Get-GroupThreads -GroupId $groupId | Sort-Object thread_id -Unique
+Write-Verbose "$($threadMessages.length) 件のスレッドが見つかりました。"
 
-$threadMessages2 = $threadMessages | Sort-Object thread_id -Unique
-Write-Verbose "$($threadMessages2.length) 件のスレッドが見つかりました。"
-
-Write-Output "$($threadMessages.length) -> $($threadMessages2.length)"
-
+# メッセージといいねの入れ物
 $messageList = @()
 $likedList = @()
 
-foreach ($thread in $threadMessages2) {
+foreach ($thread in $threadMessages) {
+
+	# スレッドのメッセージを集める
 	$messages = Get-ThreadMessages -ThreadId $thread.thread_id
 	foreach ($message in $messages) {
-		if ($message.liked_by.count -gt 0) {
-			if ($message.liked_by.count -eq $message.liked_by.names.length) {
-                $message.liked_by.names | ForEach-Object {
-                    $likedUser = $_
-					$likedList += [PSCustomObject]@{
-						message_id = $message.id
-						user_id = $likedUser.user_id
-					}
-                }
-			} else {
-				$likedUsers = Get-LikedUsers -MessageId $message.id
-				foreach ($likedUser in $likedUsers) {
-					$likedList += [PSCustomObject]@{
-						message_id = $message.id
-						user_id = $likedUser.id
-					}
+		if ($message.liked_by.count -eq 0) {
+			# いいねされてないメッセージは言い値の処理をしなくても良い
+			continue
+		}
+
+		# いいねユーザーがメッセージ レコード内にすべて含まれているので再問合せは不要
+		if ($message.liked_by.count -eq $message.liked_by.names.length) {
+            $message.liked_by.names | ForEach-Object {
+                $likedUser = $_
+				$likedList += [PSCustomObject]@{
+					message_id = $message.id
+					user_id = $likedUser.user_id
+				}
+            }
+
+		# すべて含まれない場合は、いいねユーザーを集めてくる必要がある
+		} else {
+			$likedUsers = Get-LikedUsers -MessageId $message.id
+			foreach ($likedUser in $likedUsers) {
+				$likedList += [PSCustomObject]@{
+					message_id = $message.id
+					user_id = $likedUser.id
 				}
 			}
 		}
@@ -64,17 +69,23 @@ foreach ($thread in $threadMessages2) {
 	$messageList += $messages
 }
 
+# ローカル ファイルの出力先
 $LocalTargetDirectory = "C:\"
+
+# ファイル名をユニークにするために埋め込む文字列
 $Date = Get-Date -Format "yyyyMMdd-HHmmss"
 
+# ファイル格納先の情報は Automation 変数から取得する
 $ResourceGroupName = Get-AutomationVariable -Name "ResourceGroupName"
 $StorageAccountName = Get-AutomationVariable -Name "StorageAccountName"
 $JsonContainerName = Get-AutomationVariable -Name "JsonContainerName"
 
+# PowerShell から Azure に接続し、出力先のストレージ アカウントをセットする
 $conn = Get-AutomationConnection -Name "AzureRunAsConnection"
 Add-AzureRMAccount -ServicePrincipal -Tenant $Conn.TenantID -ApplicationID $Conn.ApplicationID -CertificateThumbprint $Conn.CertificateThumbprint | Out-Null
 Set-AzureRmCurrentStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName | Out-Null
 
+# 所属メンバーのリストをファイルに保存する
 Write-Verbose "ファイルに保存します。"
 $DateBlobName = "YammerMembers_" + $GroupId + "_" + $Date + ".json"
 $LocalFile = $LocalTargetDirectory + $DateBlobName
@@ -85,6 +96,7 @@ Write-Verbose "Azure ストレージに保存します。"
 Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $DateBlobName | Out-Null
 Write-Verbose "Azure ストレージに保存しました。"
 
+# メッセージのリストをファイルに保存する
 Write-Verbose "ファイルに保存します。"
 $DateBlobName = "YammerMessages_" + $GroupId + "_" + $Date + ".json"
 $LocalFile = $LocalTargetDirectory + $DateBlobName
@@ -95,6 +107,7 @@ Write-Verbose "Azure ストレージに保存します。"
 Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $DateBlobName | Out-Null
 Write-Verbose "Azure ストレージに保存しました。"
 
+# いいねユーザーのリストをファイルに保存する
 Write-Verbose "ファイルに保存します。"
 $DateBlobName = "YammerLiked_" + $GroupId + "_" + $Date + ".json"
 $LocalFile = $LocalTargetDirectory + $DateBlobName
