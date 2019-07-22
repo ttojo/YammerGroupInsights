@@ -1,18 +1,28 @@
-﻿param (
+﻿#-------------------------------------------------------------------------------------------------------
+#
+# Yammer グループの活動状況をエクスポート
+#
+# Version:        1.0
+# Author:         Toshio Tojo
+# Company Name:   Microsoft Japan
+# Copyright:      (c) 2019 Toshio Tojo, Microsoft Japan. All rights reserved.
+# Creation Date:  2019/7/20
+#
+#-------------------------------------------------------------------------------------------------------
+
+param (
     [Parameter(Mandatory = $true)] $GroupId
 )
 
-$VerbosePreference = 'Continue'
+# デバッグ時に詳細メッセージを出力する場合は有効にする
+# $VerbosePreference = 'Continue'
 
-Write-Verbose "開発者トークン = $($developerToken)"
-
-$messageList = @()
-$likedList = @()
-
+# 対象グループの名前を取得 (デバッグ用)
 Write-Verbose "グループ (ID=$groupId) の処理を始めます。"
 $groupInfo = Get-GroupInfo -GroupId $groupId
 Write-Verbose "グループ名は [$($groupInfo.full_name)] です。"
 
+# グループに所属するメンバーのリストを作成
 Write-Host "メンバー リストを作成します。"
 $groupMembers = Get-GroupMembers -GroupId $groupId
 
@@ -22,6 +32,11 @@ Write-Verbose "トータル $($threadMessages.length) 件のメッセージを�
 
 $threadMessages2 = $threadMessages | Sort-Object thread_id -Unique
 Write-Verbose "$($threadMessages2.length) 件のスレッドが見つかりました。"
+
+Write-Output "$($threadMessages.length) -> $($threadMessages2.length)"
+
+$messageList = @()
+$likedList = @()
 
 foreach ($thread in $threadMessages2) {
 	$messages = Get-ThreadMessages -ThreadId $thread.thread_id
