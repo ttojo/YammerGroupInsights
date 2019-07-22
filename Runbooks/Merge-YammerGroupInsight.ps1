@@ -1,209 +1,167 @@
-﻿$VerbosePreference = 'Continue'
+﻿#-------------------------------------------------------------------------------------------------------
+#
+# Yammer グループの活動状況をマージ
+#
+# Version:        1.0
+# Author:         Toshio Tojo
+# Company Name:   Microsoft Japan
+# Copyright:      (c) 2019 Toshio Tojo, Microsoft Japan. All rights reserved.
+# Creation Date:  2019/7/20
+#
+#-------------------------------------------------------------------------------------------------------
 
-function Get-DeveloperToken {
-    $credential = Get-AutomationPSCredential -Name "YammerDeveloper"
-    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($credential.Password)
-    [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-}
+param (
+	# マージ対象となる Yammer グループ ID の配列
+    [Parameter(Mandatory = $true)] [string[]]$GroupIds
+)
 
-# Rest API の呼び出し
-function Invoke-RestAPI {
-    param (
-        [Parameter(Mandatory = $true)] [Uri] $Uri,
-        [Parameter(Mandatory = $false)] [System.Collections.IDictionary] $Headers,
-        [Parameter(Mandatory = $false)] [Microsoft.PowerShell.Commands.WebRequestMethod] $Method = [Microsoft.PowerShell.Commands.WebRequestMethod]::Get,
-        [Parameter(Mandatory = $false)] [Int32] $RetryCount = 0,
-        [Parameter(Mandatory = $false)] [Int32] $RetryInterval = 10
-    )
+# デバッグ時に詳細メッセージを出力する場合は有効にする
+# $VerbosePreference = 'Continue'
 
-    $completed = $false
-    $retries = 0
-
-    while (-not $completed) {
-        try {
-            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method
-            $completed = $true
-        } catch {
-            $ex = $_.Exception
-
-            if ($ex.Response -ne $null) {
-                
-                if ($retries -lt $RetryCount) {
-                    $sc = [int]$ex.Response.StatusCode.Value__
-                    if (($sc -eq 304) -or ((400 -le $sc) -and ($sc -le 599))) {
-                        $retries++
-                        Write-Verbose "リトライします...($retries/$RetryCount)"
-                        Start-Sleep -Seconds $RetryInterval
-                        continue
-                    }
-                }
-                $errorResponse = $ex.Response.GetResponseStream()
-                $reader = New-Object System.IO.StreamReader($errorResponse)
-                $reader.BaseStream.Position = 0
-                $reader.DiscardBufferedData()
-                $responseBody = $reader.ReadToEnd();
-
-                Write-Host "Response content:`n$responseBody" -f Red
-                Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-            } else {
-                Write-Host "Unhanded exception:`n$ex"
-            }
-
-            #re-throw
-            throw
-        }
-    }
-
-    return $response
-}
-
-# グループ情報を取得
-function Get-GroupInfo {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)] $GroupId
-    )
-
-    $apiVersion = "v1"
-    $Resource = "/groups/$($GroupId).json"
-    $uri = "https://www.yammer.com/api/$apiVersion/$Resource"
-    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 30
-    $response
-}
-
-# Developer Token
-$developerToken = Get-DeveloperToken
-$authHeader = @{
-    'Content-Type' = 'application/json'
-    'Authorization' = "Bearer $developerToken"
-}
-
-Write-Verbose "対象の Yammer グループ IDを取得"
-$groupIdsString = Get-AutomationVariable -Name 'YammerGroupIds'
-Write-Verbose "Yammer グループ リスト $groupIdsString"
-$groupIds = $groupIdsString -split ","
-
+# ローカル ファイルの出力先
 $LocalTargetDirectory = "C:\"
+
+# ファイル名をユニークにするために埋め込む文字列
 $Date = Get-Date -Format "yyyyMMdd-HHmmss"
-$ExcelName = "YammerGroup" + "_" + $Date + ".xlsx"
-$ExcelPath = $LocalTargetDirectory + $ExcelName
 
-$excel = Export-Excel -Path $ExcelPath -ClearSheet -PassThru -FreezeTopRow -WorksheetName "全グループ統合"
-$worksheet0 = $excel.Workbook.Worksheets[1]
-#$worksheet0.SheetName = "全グループ統合"
-#$worksheet.View.FreezePanes(2, 1)
+# ファイル格納先の情報は Automation 変数から取得する
+$ResourceGroupName = Get-AutomationVariable -Name "ResourceGroupName"
+$StorageAccountName = Get-AutomationVariable -Name "StorageAccountName"
+$JsonContainerName = Get-AutomationVariable -Name "JsonContainerName"
+$GenerationsToKeep = Get-AutomationVariable -Name "GenerationsToKeep"
 
-$worksheet0.Cells[1, 1].Value = "グループ"
-$worksheet0.Cells[1, 2].Value = "フルネーム"
-$worksheet0.Cells[1, 3].Value = "ジョブ タイトル"
-$worksheet0.Cells[1, 4].Value = "メール アドレス"
-$worksheet0.Cells[1, 5].Value = "投稿数"
-$worksheet0.Cells[1, 6].Value = "作成スレッド数"
-$worksheet0.Cells[1, 7].Value = "返信数"
-$worksheet0.Cells[1, 8].Value = "いいねした数"
-$worksheet0.Cells[1, 9].Value = "いいねされた数"
-
-$worksheet0.Column(1).Width = 25
-$worksheet0.Column(2).Width = 25
-$worksheet0.Column(3).Width = 25
-$worksheet0.Column(4).Width = 25
-$worksheet0.Column(5).Width = 13
-$worksheet0.Column(6).Width = 13
-$worksheet0.Column(7).Width = 13
-$worksheet0.Column(8).Width = 13
-$worksheet0.Column(9).Width = 13
-
-$row0 = 2
-
-Write-Verbose "ストレージに接続"
+# PowerShell から Azure に接続し、出力先のストレージ アカウントをセットする
 $conn = Get-AutomationConnection -Name "AzureRunAsConnection"
 Add-AzureRMAccount -ServicePrincipal -Tenant $Conn.TenantID -ApplicationID $Conn.ApplicationID -CertificateThumbprint $Conn.CertificateThumbprint | Out-Null
-Set-AzureRmCurrentStorageAccount -ResourceGroupName 'TOTOJO-STU-RG' -StorageAccountName 'yammergroupinsight' | Out-Null
+Set-AzureRmCurrentStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName | Out-Null
 
-foreach ($groupId in $groupIds) {
+# マージしたデータの入れ物
+$groupList = @()
+$messageList = @()
+$likeList = @()
+$userList = @()
+$memberList = @()
+
+foreach ($groupId in $GroupIds) {
     Write-Verbose "=== グループ ID [$groupId] の処理 ==="
 
+	# Yammer グループ情報を取得してグループ リストに追加する
     Write-Verbose "グループ情報を取得"
     $group = Get-GroupInfo -GroupId $groupId
+	$groupList += $group
 
-    # シート名の最大が 31 文字なので、グループ名が長いやつは切ります
-    $sheetName = if ($group.full_name.length -le 31) { $group.full_name } else { $group.full_name.Substring(0, 31) }
-    $worksheet = Add-WorkSheet -ExcelPackage $excel -ClearSheet -WorksheetName $sheetName
-    $worksheet.View.FreezePanes(3, 1)
-
-    # シートの左上にグループ名を入れてみる
-    $worksheet.Cells[1, 1].Value = $group.full_name
-    $worksheet.Cells[1, 1].Style.Font.Size = 18
-    $worksheet.Cells[1, 1].Style.Font.Bold = $true
-
-    $worksheet.Cells[2, 1].Value = "フルネーム"
-    $worksheet.Cells[2, 2].Value = "ジョブ タイトル"
-    $worksheet.Cells[2, 3].Value = "メール アドレス"
-    $worksheet.Cells[2, 4].Value = "投稿数"
-    $worksheet.Cells[2, 5].Value = "作成スレッド数"
-    $worksheet.Cells[2, 6].Value = "返信数"
-    $worksheet.Cells[2, 7].Value = "いいねした数"
-    $worksheet.Cells[2, 8].Value = "いいねされた数"
-
-    $worksheet.Column(1).Width = 25
-    $worksheet.Column(2).Width = 25
-    $worksheet.Column(3).Width = 25
-    $worksheet.Column(4).Width = 13
-    $worksheet.Column(5).Width = 13
-    $worksheet.Column(6).Width = 13
-    $worksheet.Column(7).Width = 13
-    $worksheet.Column(8).Width = 13
-
-    $prefix = "Yammer" + $groupId
+	# グループ メンバーをマージする
+	#
+	# 基本的な流れは次の通り
+	# 1) 対象グループのグループ メンバー ファイルのうち、最新のファイルをローカルに一旦ダウンロード
+	# 2) ダウンロードしたファイル (JSON 形式) をオブジェクトにロード
+	# 3) 対象グループのグループ メンバー ファイルのうち、保存対象となる世代より古いファイルを削除
+	# 上記の一連の処理はメッセージやいいねユーザーについても同様
+	Write-Verbose "グループ メンバーを読み込み"
+    $prefix = "YammerMembers_" + $groupId + "_"
     Write-Verbose "Prefix: $prefix"
-    $blob = Get-AzureStorageBlob -Container "csvfiles" -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
+    $blob = Get-AzureStorageBlob -Container $JsonContainerName -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
     Write-Verbose "対象ファイル: $($blob.Name)"
 
     Write-Verbose "ファイルを一旦ダウンロード"
     $blob | Get-AzureStorageBlobContent -Destination $LocalTargetDirectory | Out-Null
 
-    Write-Verbose "CSV ファイルをロード"
-    $csvPath = $LocalTargetDirectory + $blob.Name
-    $groupStatus = Import-Csv $csvPath
-    $groupStatus | ft
+    Write-Verbose "JSON ファイルをロード"
+    $jsonPath = $LocalTargetDirectory + $blob.Name
+	$groupMembers = Get-Content $jsonPath | ConvertFrom-Json
 
     Write-Verbose "最近のファイルだけ残して後は削除"
-    Get-AzureStorageBlob -Container "csvfiles" -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -Skip 5 | Remove-AzureStorageBlob
+    Get-AzureStorageBlob -Container $JsonContainerName -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -Skip $GenerationsToKeep | Remove-AzureStorageBlob
 
-    for ($row = 0; $row -lt $groupStatus.length; $row++) {
-        $worksheet.Cells[(3 + $row), 1].Value = $groupStatus[$row].fullName
-        $worksheet.Cells[(3 + $row), 2].Value = $groupStatus[$row].jobTitle
-        $worksheet.Cells[(3 + $row), 3].Value = $groupStatus[$row].email
-        $worksheet.Cells[(3 + $row), 4].Value = [int]$groupStatus[$row].messageCount
-        $worksheet.Cells[(3 + $row), 5].Value = [int]$groupStatus[$row].threadCount
-        $worksheet.Cells[(3 + $row), 6].Value = [int]$groupStatus[$row].responseCount
-        $worksheet.Cells[(3 + $row), 7].Value = [int]$groupStatus[$row].likeCount
-        $worksheet.Cells[(3 + $row), 8].Value = [int]$groupStatus[$row].likedCount
+	# グループ メンバーは ID 情報だけを抜粋して、それ以外は捨てる
+    Write-Verbose "グループ メンバーのリストを作成"
+	$groupMembers | ForEach-Object { $memberList += [PSCustomObject]@{ group_id = $groupId; user_id = $_.id } }
 
-        $worksheet0.Cells[($row0 + $row), 1].Value = $group.full_name
-        for ($col = 1; $col -lt 9; $col++) {
-            $worksheet0.Cells[($row0 + $row), ($col + 1)].Value = $worksheet.Cells[(3 + $row), $col].Value
-        }
-    }
-    $row0 += $groupStatus.length
+	# ユーザー リストにグループ メンバーを追加する (ただし、ユーザーの重複は排除しておく)
+	$userList += $groupMembers
+	$userList = $userList | Sort-Object id -Unique
 
-    $table = Add-ExcelTable -PassThru -Range $worksheet.Cells[2, 1, (2 + $groupStatus.length), 8] -TableName "Table$groupId" -TableStyle Medium1 `
-        -ShowHeader -ShowFilter -ShowRowStripes:$true -ShowTotal:$true
-    $table.Columns[3].TotalsRowFunction = "sum"
-    $table.Columns[4].TotalsRowFunction = "sum"
-    $table.Columns[5].TotalsRowFunction = "sum"
-    $table.Columns[6].TotalsRowFunction = "sum"
-    $table.Columns[7].TotalsRowFunction = "sum"
+	# グループ メッセージをマージする
+	Write-Verbose "グループ メッセージを読み込み"
+    $prefix = "YammerMessages_" + $groupId + "_"
+    Write-Verbose "Prefix: $prefix"
+    $blob = Get-AzureStorageBlob -Container $JsonContainerName -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
+    Write-Verbose "対象ファイル: $($blob.Name)"
+
+    Write-Verbose "ファイルを一旦ダウンロード"
+    $blob | Get-AzureStorageBlobContent -Destination $LocalTargetDirectory | Out-Null
+
+    Write-Verbose "JSON ファイルをロード"
+    $jsonPath = $LocalTargetDirectory + $blob.Name
+	$groupMessages = Get-Content $jsonPath | ConvertFrom-Json
+	$messageList += $groupMessages
+
+    Write-Verbose "最近のファイルだけ残して後は削除"
+    Get-AzureStorageBlob -Container $JsonContainerName -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -Skip $GenerationsToKeep | Remove-AzureStorageBlob
+
+	# グループのいいねユーザーをマージする
+	Write-Verbose "グループ いいねユーザーを読み込み"
+    $prefix = "YammerLiked_" + $groupId + "_"
+    Write-Verbose "Prefix: $prefix"
+    $blob = Get-AzureStorageBlob -Container $JsonContainerName -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
+    Write-Verbose "対象ファイル: $($blob.Name)"
+
+    Write-Verbose "ファイルを一旦ダウンロード"
+    $blob | Get-AzureStorageBlobContent -Destination $LocalTargetDirectory | Out-Null
+
+    Write-Verbose "JSON ファイルをロード"
+    $jsonPath = $LocalTargetDirectory + $blob.Name
+	$groupLikes = Get-Content $jsonPath | ConvertFrom-Json
+	$likeList += $groupLikes
+
+    Write-Verbose "最近のファイルだけ残して後は削除"
+    Get-AzureStorageBlob -Container $JsonContainerName -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -Skip $GenerationsToKeep | Remove-AzureStorageBlob
 }
 
-$table = Add-ExcelTable -PassThru -Range $worksheet0.Cells[1, 1, $row0, 9] -TableName "Table0" -TableStyle Medium1 `
-    -ShowHeader -ShowFilter -ShowRowStripes:$true -ShowTotal:$false
+# グループ一覧をマージ ファイルに保存する (ファイル名は固定)
+Write-Verbose "グループ一覧をファイル化する"
+$blobName = "YammerGroups-Current.json"
+$LocalFile = $LocalTargetDirectory + $blobName
+$groupList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
+Get-AzureStorageBlob -Container $JsonContainerName -Prefix $blobName | Remove-AzureStorageBlob
+Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $blobName | Out-Null
 
-Close-ExcelPackage -ExcelPackage $excel -Show:$false
+# ユーザー一覧をマージ ファイルに保存する (ファイル名は固定)
+Write-Verbose "ユーザー一覧をファイル化する"
+$blobName = "YammerUsers-Current.json"
+$LocalFile = $LocalTargetDirectory + $blobName
+$userList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
+Get-AzureStorageBlob -Container $JsonContainerName -Prefix $blobName | Remove-AzureStorageBlob
+Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $blobName | Out-Null
 
-Set-AzureStorageBlobContent -File $ExcelPath -Container "reports" -Blob $ExcelName | Out-Null
+# グループ メンバー一覧をマージ ファイルに保存する (ファイル名は固定)
+Write-Verbose "メンバー一覧をファイル化する"
+$blobName = "YammerMembers-Current.json"
+$LocalFile = $LocalTargetDirectory + $blobName
+$memberList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
+Get-AzureStorageBlob -Container $JsonContainerName -Prefix $blobName | Remove-AzureStorageBlob
+Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $blobName | Out-Null
 
-Get-AzureStorageBlob -Container "reports" -Prefix "Yammer-Current.xlsx" | Remove-AzureStorageBlob
-Set-AzureStorageBlobContent -File $ExcelPath -Container "reports" -Blob "Yammer-Current.xlsx" | Out-Null
+# メッセージ一覧から未使用カラムの値を削除（高速化のため）
+foreach ($msg in $messageList) {
+	$msg.body.parsed = ""
+	$msg.body.rich = ""
+	$msg.attachments = $null
+	$msg.content_excerpt = ""
+}
 
-Get-AzureStorageBlob -Container "reports" -Prefix "YammerGroup" | Sort-Object LastModified -Desc | Select-Object -Skip 3 | Remove-AzureStorageBlob
+# メッセージ一覧をマージ ファイルに保存する (ファイル名は固定)
+Write-Verbose "メッセージ一覧をファイル化する"
+$blobName = "YammerMessages-Current.json"
+$LocalFile = $LocalTargetDirectory + $blobName
+$messageList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
+Get-AzureStorageBlob -Container $JsonContainerName -Prefix $blobName | Remove-AzureStorageBlob
+Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $blobName | Out-Null
+
+# いいねユーザー一覧をマージ ファイルに保存する (ファイル名は固定)
+Write-Verbose "いいね一覧をファイル化する"
+$blobName = "YammerLikes-Current.json"
+$LocalFile = $LocalTargetDirectory + $blobName
+$likeList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FilePath $LocalFile -Force
+Get-AzureStorageBlob -Container $JsonContainerName -Prefix $blobName | Remove-AzureStorageBlob
+Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $blobName | Out-Null
