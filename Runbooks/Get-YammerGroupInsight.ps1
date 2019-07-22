@@ -4,8 +4,6 @@
 
 $VerbosePreference = 'Continue'
 
-Import-Module YammerGroupExport
-
 Write-Verbose "開発者トークン = $($developerToken)"
 
 $messageList = @()
@@ -54,9 +52,13 @@ foreach ($thread in $threadMessages2) {
 $LocalTargetDirectory = "C:\"
 $Date = Get-Date -Format "yyyyMMdd-HHmmss"
 
+$ResourceGroupName = Get-AutomationVariable -Name "ResourceGroupName"
+$StorageAccountName = Get-AutomationVariable -Name "StorageAccountName"
+$JsonContainerName = Get-AutomationVariable -Name "JsonContainerName"
+
 $conn = Get-AutomationConnection -Name "AzureRunAsConnection"
 Add-AzureRMAccount -ServicePrincipal -Tenant $Conn.TenantID -ApplicationID $Conn.ApplicationID -CertificateThumbprint $Conn.CertificateThumbprint | Out-Null
-Set-AzureRmCurrentStorageAccount -ResourceGroupName 'TOTOJO-STU-RG' -StorageAccountName 'yammergroupinsight' | Out-Null
+Set-AzureRmCurrentStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName | Out-Null
 
 Write-Verbose "ファイルに保存します。"
 $DateBlobName = "YammerMembers_" + $GroupId + "_" + $Date + ".json"
@@ -65,7 +67,7 @@ $groupMembers | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -Fi
 Write-Verbose "$($LocalFile) に保存しました。"
 
 Write-Verbose "Azure ストレージに保存します。"
-Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $DateBlobName | Out-Null
+Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $DateBlobName | Out-Null
 Write-Verbose "Azure ストレージに保存しました。"
 
 Write-Verbose "ファイルに保存します。"
@@ -75,7 +77,7 @@ $messageList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -Fil
 Write-Verbose "$($LocalFile) に保存しました。"
 
 Write-Verbose "Azure ストレージに保存します。"
-Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $DateBlobName | Out-Null
+Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $DateBlobName | Out-Null
 Write-Verbose "Azure ストレージに保存しました。"
 
 Write-Verbose "ファイルに保存します。"
@@ -85,5 +87,5 @@ $likedList | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding utf8 -FileP
 Write-Verbose "$($LocalFile) に保存しました。"
 
 Write-Verbose "Azure ストレージに保存します。"
-Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $DateBlobName | Out-Null
+Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $DateBlobName | Out-Null
 Write-Verbose "Azure ストレージに保存しました。"
