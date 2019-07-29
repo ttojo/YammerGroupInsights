@@ -1,85 +1,49 @@
-﻿param (
-    [Parameter(Mandatory = $true)] $PrimaryApiKey
-)
+﻿#-------------------------------------------------------------------------------------------------------
+#
+# Yammer メッセージのキーフレーズを抽出
+#
+# Version:        1.0
+# Author:         Toshio Tojo
+# Company Name:   Microsoft Japan
+# Copyright:      (c) 2019 Toshio Tojo, Microsoft Japan. All rights reserved.
+# Creation Date:  2019/7/20
+#
+#-------------------------------------------------------------------------------------------------------
 
-$VerbosePreference = 'Continue'
+# デバッグ時に詳細メッセージを出力する場合は有効にする
+# $VerbosePreference = 'Continue'
 
-function Get-DeveloperToken {
-    $credential = Get-AutomationPSCredential -Name "YammerDeveloper"
-    $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($credential.Password)
-    [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
-}
+# ローカル ファイルの出力先
+$LocalTargetDirectory = "C:\"
 
-# REST API の呼び出し（リトライあり）
-function Invoke-RestAPI {
-    param (
-        [Parameter(Mandatory = $true)] [Uri] $Uri,
-        [Parameter(Mandatory = $false)] [System.Collections.IDictionary] $Headers,
-        [Parameter(Mandatory = $false)] [Microsoft.PowerShell.Commands.WebRequestMethod] $Method = [Microsoft.PowerShell.Commands.WebRequestMethod]::Get,
-		[Parameter(Mandatory = $false)] [Object] $Body,
-		[Parameter(Mandatory = $false)] [string] $ContentType,
-        [Parameter(Mandatory = $false)] [Int32] $RetryCount = 0,
-        [Parameter(Mandatory = $false)] [Int32] $RetryInterval = 10
-    )
+# ファイル名をユニークにするために埋め込む文字列
+$Date = Get-Date -Format "yyyyMMdd-HHmmss"
 
-    $completed = $false
-    $retries = 0
+# ファイル格納先の情報は Automation 変数から取得する
+$ResourceGroupName = Get-AutomationVariable -Name "ResourceGroupName"
+$StorageAccountName = Get-AutomationVariable -Name "StorageAccountName"
+$JsonContainerName = Get-AutomationVariable -Name "JsonContainerName"
+$KeyPhraseExtractionUri = Get-AutomationVariable -Name "KeyPhraseExtractionUri"
+$TextAnalyticsApiKey = Get-AutomationVariable -Name "TextAnalyticsApiKey"
+$GenerationsToKeep = Get-AutomationVariable -Name "GenerationsToKeep"
 
-    while (-not $completed) {
-        try {
-            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method -Body $Body -ContentType $ContentType
-            $completed = $true
-        } catch {
-            $ex = $_.Exception
+# PowerShell から Azure に接続し、出力先のストレージ アカウントをセットする
+$conn = Get-AutomationConnection -Name "AzureRunAsConnection"
+Add-AzureRMAccount -ServicePrincipal -Tenant $Conn.TenantID -ApplicationID $Conn.ApplicationID -CertificateThumbprint $Conn.CertificateThumbprint | Out-Null
+Set-AzureRmCurrentStorageAccount -ResourceGroupName $ResourceGroupName -StorageAccountName $StorageAccountName | Out-Null
 
-            if ($ex.Response -ne $null) {
-                
-                if ($retries -lt $RetryCount) {
-                    $sc = [int]$ex.Response.StatusCode.Value__
-                    if (($sc -eq 304) -or ((400 -le $sc) -and ($sc -le 599))) {
-                        $retries++
-                        Write-Verbose "Retry...($retries/$RetryCount)"
-                        Start-Sleep -Seconds $RetryInterval
-                        continue
-                    }
-                }
-                $errorResponse = $ex.Response.GetResponseStream()
-                $reader = New-Object System.IO.StreamReader($errorResponse)
-                $reader.BaseStream.Position = 0
-                $reader.DiscardBufferedData()
-                $responseBody = $reader.ReadToEnd();
-
-                Write-Host "Response content:`n$responseBody" -f Red
-                Write-Error "Request to $Uri failed with HTTP Status $($ex.Response.StatusCode) $($ex.Response.StatusDescription)"
-            } else {
-                Write-Host "Unhanded exception:`n$ex"
-            }
-
-            #re-throw
-            throw
-        }
-    }
-
-    return $response
-}
-
-function Get-AzureKeywords ($messageToEvaluate)
-{
-	$azureRegion = "japaneast"
-
-    #define cognitive services URLs
-    $keyPhraseURI = "https://$azureRegion.api.cognitive.microsoft.com/text/analytics/v2.0/keyPhrases"
-
+# メッセージからキーフレーズを抽出する (戻り値はキーフレーズのコレクション)
+function Get-KeyPhrases ($messageToEvaluate) {
     #create the JSON request
     $documents = @()
-    $requestHashtable = @{"language" = "ja"; "id" = "1"; "text" = "$messageToEvaluate" };
+    $requestHashtable = @{"language" = "ja"; "id" = "1"; "text" = "$messageToEvaluate"};
     $documents += $requestHashtable
     $final = @{documents = $documents}
     $messagePayload = ConvertTo-Json $final
     $messagePayload = [System.Text.Encoding]::UTF8.GetBytes($messagePayload)
 
     #invoke the Text Analytics Keyword API
-    $keywordResult = Invoke-RestAPI -Method Post -Uri $keyPhraseURI -Header @{ "Ocp-Apim-Subscription-Key" = $PrimaryApiKey } -Body $messagePayload -ContentType "application/json"  -RetryCount 10 -RetryInterval 30
+    $keywordResult = Invoke-RestAPI -Method Post -Uri $KeyPhraseExtractionUri -Header @{ "Ocp-Apim-Subscription-Key" = $TextAnalyticsApiKey } -Body $messagePayload -ContentType "application/json"  -RetryCount 10 -RetryInterval 30
 
 	if ($keywordResult.documents.length -eq 0) {
 		return ""
@@ -89,23 +53,14 @@ function Get-AzureKeywords ($messageToEvaluate)
     return $keywordResult.documents.keyPhrases
 }
 
-
-#-------- ここからがメイン処理 --------
-
-$LocalTargetDirectory = "C:\"
-$Date = Get-Date -Format "yyyyMMdd-HHmmss"
-
-$conn = Get-AutomationConnection -Name "AzureRunAsConnection"
-Add-AzureRMAccount -ServicePrincipal -Tenant $Conn.TenantID -ApplicationID $Conn.ApplicationID -CertificateThumbprint $Conn.CertificateThumbprint | Out-Null
-Set-AzureRmCurrentStorageAccount -ResourceGroupName 'TOTOJO-STU-RG' -StorageAccountName 'yammergroupinsight' | Out-Null
-
 $keyPhraseHash = @{}
 $messageList = @()
 
+# 前回までに処理したキーフレーズ一覧を読み込んでおく
 Write-Verbose "前回までのキーフレーズ ファイルを読み込み"
 $prefix = "YammerKeyPhrases_"
 Write-Verbose "Prefix: $prefix"
-$blob = Get-AzureStorageBlob -Container "json" -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
+$blob = Get-AzureStorageBlob -Container $JsonContainerName -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
 if ($blob -ne $null) {
 	Write-Verbose "対象ファイル: $($blob.Name)"
 
@@ -116,20 +71,18 @@ if ($blob -ne $null) {
     $jsonPath = $LocalTargetDirectory + $blob.Name
 	$keyPhrases = Get-Content $jsonPath | ConvertFrom-Json
 	$keyPhrases | ForEach-Object {
-		$keyPhraseHash.Add($_.id, [PSCustomObject]@{
-			id = $_.id
-			key_phrases = $_.key_phrases
-		})
+		$keyPhraseHash.Add($_.id, [PSCustomObject]@{id = $_.id; key_phrases = $_.key_phrases})
 	}
 
     Write-Verbose "最近のファイルだけ残して後は削除"
-    Get-AzureStorageBlob -Container "json" -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -Skip 5 | Remove-AzureStorageBlob
+    Get-AzureStorageBlob -Container $JsonContainerName -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -Skip $GenerationsToKeep | Remove-AzureStorageBlob
 }
 
+# 処理対象のメッセージ一覧を読み込む
 Write-Verbose "グループ メッセージを読み込み"
 $prefix = "YammerMessages-Current.json"
 Write-Verbose "Prefix: $prefix"
-$blob = Get-AzureStorageBlob -Container "json" -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
+$blob = Get-AzureStorageBlob -Container $JsonContainerName -Prefix $prefix | Sort-Object LastModified -Desc | Select-Object -First 1
 Write-Verbose "対象ファイル: $($blob.Name)"
 
 Write-Verbose "ファイルを一旦ダウンロード"
@@ -141,36 +94,21 @@ $messageList = Get-Content $jsonPath | ConvertFrom-Json
 
 $count = 0
 
+# 既存のキーフレーズ一覧に含まれないメッセージ (= 新規に追加されたメッセージ) のみキーフレーズ抽出を実施
 foreach ($msg in $messageList) {
-	#if ($count -gt 10) {
-	#	break
-	#}
+	if ($keyPhraseHash.ContainsKey($msg.id) -ne $true) {
+		$phrases = @()
 
-	#$dt = [datetime]$msg.created_at
-	#if ($dt.Year -lt 2018) {
-	#	continue
-	#}
+		Write-Verbose "テキスト分析"
+		$keywords = Get-KeyPhrases -messageToEvaluate $msg.body.plain
+		$keywords | ForEach-Object { $phrases += $_ }
 
-	if ($keyPhraseHash.ContainsKey($msg.id) -eq $true) {
-		continue
+		$keyPhraseHash.Add($msg.id, [PSCustomObject]@{id = $msg.id; key_phrases = $phrases})
+		$count++
 	}
-
-	$phrases = @()
-
-	Write-Verbose "テキスト分析"
-	$keywords = Get-AzureKeywords -messageToEvaluate $msg.body.plain
-	$keywords | ForEach-Object {
-		$phrases += $_
-	}
-
-	$keyPhraseHash.Add($msg.id, [PSCustomObject]@{
-		id = $msg.id
-		key_phrases = $phrases
-	})
-	$count++
 }
 
-
+# 新しく作成したキーフレーズ一覧をファイルに保存 (作業履歴用)
 Write-Verbose "できあがったキーフレーズ ファイルを保存"
 $DateBlobName = "YammerKeyPhrases_" + $Date + ".json"
 $LocalFile = $LocalTargetDirectory + $DateBlobName
@@ -178,11 +116,12 @@ $keyPhraseHash.Values | ConvertTo-Json -Depth 10 -Compress | Out-File -Encoding 
 Write-Verbose "$($LocalFile) に保存しました。"
 
 Write-Verbose "作成履歴を保存"
-Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $DateBlobName | Out-Null
+Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $DateBlobName | Out-Null
 
+# 新しく作成したキーフレーズ一覧をファイルに保存 (最新)
 Write-Verbose "最新のキーフレーズ ファイルを保存"
 $blobName = "YammerKeyPhrases-Current.json"
-Get-AzureStorageBlob -Container "json" -Prefix $blobName | Remove-AzureStorageBlob
-Set-AzureStorageBlobContent -File $LocalFile -Container "json" -Blob $blobName | Out-Null
+Get-AzureStorageBlob -Container $JsonContainerName -Prefix $blobName | Remove-AzureStorageBlob
+Set-AzureStorageBlobContent -File $LocalFile -Container $JsonContainerName -Blob $blobName | Out-Null
 
-Write-Output "$($count) 件のレコードを処理しました。"
+Write-Verbose "$($count) 件のレコードを処理しました。"

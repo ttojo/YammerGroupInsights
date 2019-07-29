@@ -23,7 +23,20 @@ $Date = Get-Date -Format "yyyyMMdd-HHmmss"
 $ResourceGroupName = Get-AutomationVariable -Name "ResourceGroupName"
 $StorageAccountName = Get-AutomationVariable -Name "StorageAccountName"
 $JsonContainerName = Get-AutomationVariable -Name "JsonContainerName"
-$GetUserGuidServiceUri = Get-AutomationVariable -Name "GetUserGuidServiceUri"
+$UserGuidQueryUri = Get-AutomationVariable -Name "UserGuidQueryUri"
+
+# ユーザーの GUID を問い合わせる (戻り値はコレクション形式となることに注意)
+function Get-UserGuids ($Id, $Email) {
+	# Web サービスに GUID を問い合わせ
+	$requestHashtable = @{"id" = $Id; "email" = $Email}
+	$messagePayLoad = ConvertTo-Json $requestHashtable
+	$messagePayload = [System.Text.Encoding]::UTF8.GetBytes($messagePayload)
+
+	$response = Invoke-RestAPI -Method Post -Uri $UserGuidQueryUri -Body $messagePayload -ContentType "application/json" -RetryCount 10 -RetryInterval 30
+
+	# 戻り値はコレクション
+	$response.users
+}
 
 # PowerShell から Azure に接続し、出力先のストレージ アカウントをセットする
 $conn = Get-AutomationConnection -Name "AzureRunAsConnection"
@@ -61,14 +74,8 @@ $userList | ForEach-Object {
 	if ($guidHash.ContainsKey($user.id)) {
 		$results += $guidHash[$user.id]
 	} else {
-		# 未知の Yammer ユーザーの GUID を Web サービスに問い合わせる
-		$requestHashtable = @{"id" = $user.id; "email" = $user.email}
-		$messagePayLoad = ConvertTo-Json $requestHashtable
-		$messagePayload = [System.Text.Encoding]::UTF8.GetBytes($messagePayload)
-
-		$response = Invoke-RestAPI -Method Post -Uri $GetUserGuidServiceUri -Body $messagePayload -ContentType "application/json" -RetryCount 10 -RetryInterval 30
-
-		$response.users | ForEach-Object {
+		# 未知の Yammer ユーザーの GUID を問い合わせる
+		Get-UserGuids -Id $user.id -Email $user.email | ForEach-Object {
 			$newGuid = [PSCustomObject]@{id = $_.id; email = $_.email; guid = $_.guid}
 			$guidHash.Add($_.id, $newGuid)
 			$results += $newGuid

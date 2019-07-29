@@ -27,6 +27,7 @@ Write-Host "メンバー リストを作成します。"
 $groupMembers = Get-GroupMembers -GroupId $groupId
 
 # グループのスレッド一覧を作成 (そのままでは重複があるのでユニークなスレッド ID のみを抽出)
+# ここで日付によるフィルターをかければデータ量を減らして処理を高速化できると思う...
 Write-Verbose "スレッド一覧を作成します。"
 $threadMessages = Get-GroupThreads -GroupId $groupId | Sort-Object thread_id -Unique
 Write-Verbose "$($threadMessages.length) 件のスレッドが見つかりました。"
