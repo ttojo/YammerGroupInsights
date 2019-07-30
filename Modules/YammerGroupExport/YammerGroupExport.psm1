@@ -66,6 +66,8 @@ function Invoke-RestAPI {
     param (
         [Parameter(Mandatory = $true)] [Uri] $Uri,
         [Parameter(Mandatory = $false)] [System.Collections.IDictionary] $Headers,
+		[Parameter(Mandatory = $false)] [System.Object] $Body,
+		[Parameter(Mandatory = $false)] [string] $ContentType,
         [Parameter(Mandatory = $false)] [Microsoft.PowerShell.Commands.WebRequestMethod] $Method = [Microsoft.PowerShell.Commands.WebRequestMethod]::Get,
         [Parameter(Mandatory = $false)] [Int32] $RetryCount = 0,
         [Parameter(Mandatory = $false)] [Int32] $RetryInterval = 10
@@ -76,7 +78,13 @@ function Invoke-RestAPI {
 
     while (-not $completed) {
         try {
-            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method
+			if ($Body -eq $null) {
+	            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method
+			} elseif ($ContentType -eq $null) {
+	            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method -Body $Body
+			} else {
+	            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method -Body $Body -ContentType $ContentType
+			}
             $completed = $true
         } catch {
             $ex = $_.Exception
