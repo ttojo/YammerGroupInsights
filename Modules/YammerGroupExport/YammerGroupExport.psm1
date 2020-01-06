@@ -63,6 +63,7 @@ function Get-DeveloperToken {
   Creation Date:  2019/7/20
 #>
 function Invoke-RestAPI {
+    [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)] [Uri] $Uri,
         [Parameter(Mandatory = $false)] [System.Collections.IDictionary] $Headers,
@@ -73,17 +74,20 @@ function Invoke-RestAPI {
         [Parameter(Mandatory = $false)] [Int32] $RetryInterval = 10
     )
 
+    $verbose = $PSBoundParameters['Verbose'] -eq $true
+    $disableKeepAlive = $false
+
     $completed = $false
     $retries = 0
 
     while (-not $completed) {
         try {
 			if ($Body -eq $null) {
-	            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method
+	            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method -Verbose:$false -DisableKeepAlive:$disableKeepAlive
 			} elseif ($ContentType -eq $null) {
-	            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method -Body $Body
+	            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method -Body $Body -Verbose:$false -DisableKeepAlive:$disableKeepAlive
 			} else {
-	            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method -Body $Body -ContentType $ContentType
+	            $response = Invoke-RestMethod -Uri $uri -Headers $Headers -Method $Method -Body $Body -ContentType $ContentType -Verbose:$false -DisableKeepAlive:$disableKeepAlive
 			}
             $completed = $true
         } catch {
@@ -96,11 +100,12 @@ function Invoke-RestAPI {
                     $sc = [int]$ex.Response.StatusCode.Value__
                     if (($sc -eq 304) -or ((400 -le $sc) -and ($sc -le 599))) {
                         $retries++
-                        Write-Verbose "Retry...($retries/$RetryCount)"
+                        Write-Verbose "Retry...($retries/$RetryCount)" -Verbose:$verbose
                         Start-Sleep -Seconds $RetryInterval
+                        $disableKeepAlive = $true
                         continue
                     }
-                }
+				}
                 $errorResponse = $ex.Response.GetResponseStream()
                 $reader = New-Object System.IO.StreamReader($errorResponse)
                 $reader.BaseStream.Position = 0
@@ -148,10 +153,12 @@ function Get-GroupInfo {
         [Parameter(Mandatory = $true)] $GroupId
     )
 
+    $verbose = $PSBoundParameters['Verbose'] -eq $true
+
     $apiVersion = "v1"
     $Resource = "groups/$($GroupId).json"
     $uri = "https://www.yammer.com/api/$apiVersion/$Resource"
-    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method 'Get' -RetryCount 10 -RetryInterval 30
+    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method 'Get' -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
     $response
 }
 
@@ -185,12 +192,14 @@ function Get-GroupMembers {
         [Parameter(Mandatory = $true)] $GroupId
     )
 
+    $verbose = $PSBoundParameters['Verbose'] -eq $true
+
     $page = 1
 
     $apiVersion = "v1"
     $Resource = "users/in_group/$($GroupId).json"
     $uri = "https://www.yammer.com/api/$apiVersion/$Resource"
-    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 30
+    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
     $hasNext = $response.more_available
     $members = $response.users
 
@@ -198,7 +207,7 @@ function Get-GroupMembers {
         $page++
         $queryParams = "page=$($page)"
         $uri = "https://www.yammer.com/api/$apiVersion/$($Resource)?$queryParams"
-        $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 30
+        $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
 	    $hasNext = $response.more_available
         $members += $response.users
     }
@@ -236,11 +245,13 @@ function Get-GroupThreads {
         [Parameter(Mandatory = $true)] $GroupId
     )
 
+    $verbose = $PSBoundParameters['Verbose'] -eq $true
+
     $progress = 0
     $apiVersion = "v1"
     $Resource = "messages/in_group/$($GroupId).json"
     $uri = "https://www.yammer.com/api/$apiVersion/$($Resource)"
-    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 30
+    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
     $hasNext = $response.meta.older_available
     $threads = $response.messages
 
@@ -251,7 +262,7 @@ function Get-GroupThreads {
         }
         $queryParams = "older_than=" + $response.messages[$response.messages.length - 1].id
         $uri = "https://www.yammer.com/api/$apiVersion/$($Resource)?$queryParams"
-        $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 30
+        $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
 	    $hasNext = $response.meta.older_available
         $threads += $response.messages
     }
@@ -289,18 +300,20 @@ function Get-ThreadMessages {
         [Parameter(Mandatory = $true)] $ThreadId
     )
 
+    $verbose = $PSBoundParameters['Verbose'] -eq $true
+
     $apiVersion = "v1"
     $Resource = "messages/in_thread/$($ThreadId).json"
     $queryParams = "threaded=true"
     $uri = "https://www.yammer.com/api/$apiVersion/$Resource"
-    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 30
+    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
     $hasNext = $response.meta.older_available
     $messages = $response.messages
 
     while ($hasNext) {
         $queryParams = "older_than=" + $response.messages[$response.messages.length - 1].id
         $uri = "https://www.yammer.com/api/$apiVersion/$($Resource)?$queryParams"
-        $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 30
+        $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
         $hasNext = $response.meta.older_available
         $messages += $response.messages
     }
@@ -338,12 +351,14 @@ function Get-LikedUsers {
         [Parameter(Mandatory = $true)] $MessageId
     )
 
+    $verbose = $PSBoundParameters['Verbose'] -eq $true
+
     $page = 1
 
     $apiVersion = "v1"
     $Resource = "users/liked_message/$($MessageId).json"
     $uri = "https://www.yammer.com/api/$apiVersion/$Resource"
-    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 30
+    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
     $hasNext = $response.more_available
     $members = $response.users
 
@@ -351,7 +366,7 @@ function Get-LikedUsers {
         $page++
         $queryParams = "page=$($page)"
         $uri = "https://www.yammer.com/api/$apiVersion/$($Resource)?$queryParams"
-        $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 30
+        $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
         $hasNext = $response.more_available
         $members += $response.users
     }
