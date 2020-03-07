@@ -302,21 +302,26 @@ function Get-ThreadMessages {
 
     $verbose = $PSBoundParameters['Verbose'] -eq $true
 
-    $apiVersion = "v1"
-    $Resource = "messages/in_thread/$($ThreadId).json"
-    $queryParams = "threaded=true"
-    $uri = "https://www.yammer.com/api/$apiVersion/$Resource"
-    $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
-    $hasNext = $response.meta.older_available
-    $messages = $response.messages
-
-    while ($hasNext) {
-        $queryParams = "older_than=" + $response.messages[$response.messages.length - 1].id
-        $uri = "https://www.yammer.com/api/$apiVersion/$($Resource)?$queryParams"
+    try {
+        $apiVersion = "v1"
+        $Resource = "messages/in_thread/$($ThreadId).json"
+        $queryParams = "threaded=true"
+        $uri = "https://www.yammer.com/api/$apiVersion/$Resource"
         $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
         $hasNext = $response.meta.older_available
-        $messages += $response.messages
-    }
+        $messages = $response.messages
+
+        while ($hasNext) {
+            $queryParams = "older_than=" + $response.messages[$response.messages.length - 1].id
+            $uri = "https://www.yammer.com/api/$apiVersion/$($Resource)?$queryParams"
+            $response = Invoke-RestAPI -Uri $uri -Headers $authHeader -Method Get -RetryCount 10 -RetryInterval 60 -Verbose:$verbose
+            $hasNext = $response.meta.older_available
+            $messages += $response.messages
+        }
+    } catch {
+        Write-Error "ThreadId:$($ThreadId) のメッセージ リストを取得できていません。このスレッドは無視して処理を継続します。"
+        $messages = @()
+	}
 
     $messages
 }

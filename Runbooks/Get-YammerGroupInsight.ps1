@@ -38,13 +38,6 @@ $likedList = @()
 
 foreach ($thread in $threadMessages) {
 
-	# id:758867599 のスレッドを指定するとエラーになるので、仕方なく無視します
-	# https://www.yammer.com/api/v1/messages/in_thread/758867599.json を呼び出すと、Internal Server Error (500) が常に出てしまう...
-	if ($thread.thread_id -eq "758867599") {
-		Write-Verbose "id:758867599 のスレッドは無視する" -Verbose:$verbose
-		continue
-	}
-
 	# スレッドのメッセージを集める
 	$messages = Get-ThreadMessages -ThreadId $thread.thread_id -Verbose:$verbose
 	foreach ($message in $messages) {
